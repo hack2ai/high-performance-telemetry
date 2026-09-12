@@ -25,6 +25,12 @@ jobs:
       - name: Run benchmark smoke test
         run: ./build/telemetry --packets 20000 --payload 128
 
+      - name: Install package
+        run: cmake --install build --prefix "${{ github.workspace }}/install"
+
+      - name: Verify installed files
+        run: test -x "${{ github.workspace }}/install/bin/telemetry"
+
   configurable-capacity:
     name: Configurable queue capacity
     runs-on: ubuntu-latest
