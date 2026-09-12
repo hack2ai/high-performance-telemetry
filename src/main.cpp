@@ -2,6 +2,7 @@
 #include "packet_generator.hpp"
 #include "ring_buffer.hpp"
 #include "telemetry_stats.hpp"
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -13,6 +14,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <vector>
 
 namespace {
 
@@ -34,10 +36,22 @@ struct BenchmarkResult {
     std::uint64_t integrity_errors = 0;
     std::uint64_t ordering_errors = 0;
     std::uint64_t peak_queue_depth = 0;
+    std::size_t queue_memory_bytes = 0;
     double seconds = 0.0;
     double throughput = 0.0;
     double avg_latency_us = 0.0;
+    double p50_latency_us = 0.0;
+    double p95_latency_us = 0.0;
+    double p99_latency_us = 0.0;
 };
+
+double percentile_us(std::vector<std::uint64_t>& samples, double percentile) {
+    if (samples.empty()) return 0.0;
+    const auto index = static_cast<std::size_t>(
+        (percentile / 100.0) * static_cast<double>(samples.size() - 1));
+    std::nth_element(samples.begin(), samples.begin() + index, samples.end());
+    return static_cast<double>(samples[index]) / 1000.0;
+}
 
 void print_usage(const char* program) {
     std::cout << "Usage: " << program << " [options]\n\n"
@@ -101,6 +115,8 @@ BenchmarkResult run_benchmark(std::size_t packets, std::size_t payload_size) {
     telemetry::TelemetryStats stats;
     telemetry::PacketGenerator generator(payload_size);
     std::array<std::uint8_t, telemetry::kMaxPayloadSize> payload{};
+    std::vector<std::uint64_t> latencies_ns;
+    latencies_ns.reserve(packets);
     std::atomic<bool> producer_done{false};
     std::atomic<std::uint64_t> integrity_errors{0};
     std::atomic<std::uint64_t> ordering_errors{0};
@@ -142,6 +158,7 @@ BenchmarkResult run_benchmark(std::size_t packets, std::size_t payload_size) {
             const auto now = telemetry::now_nanoseconds();
             const auto latency = now >= frame.header.timestamp_ns
                 ? now - frame.header.timestamp_ns : 0;
+            latencies_ns.push_back(latency);
             stats.record_processed(latency);
         }
     });
@@ -163,10 +180,14 @@ BenchmarkResult run_benchmark(std::size_t packets, std::size_t payload_size) {
     benchmark.integrity_errors = integrity;
     benchmark.ordering_errors = ordering;
     benchmark.peak_queue_depth = result.peak_queue_depth;
+    benchmark.queue_memory_bytes = sizeof(telemetry::Frame) * telemetry::kRingBufferCapacity;
     benchmark.seconds = seconds;
     benchmark.throughput = seconds > 0.0 ? static_cast<double>(result.processed) / seconds : 0.0;
     benchmark.avg_latency_us = result.processed > 0
         ? static_cast<double>(result.total_latency_ns) / result.processed / 1000.0 : 0.0;
+    benchmark.p50_latency_us = percentile_us(latencies_ns, 50.0);
+    benchmark.p95_latency_us = percentile_us(latencies_ns, 95.0);
+    benchmark.p99_latency_us = percentile_us(latencies_ns, 99.0);
     return benchmark;
 }
 
@@ -179,6 +200,7 @@ void print_single_result(std::size_t packets, std::size_t payload_size, const Be
               << "Packets        : " << packets << "\n"
               << "Payload size   : " << payload_size << " bytes\n"
               << "Frame size     : " << sizeof(telemetry::Frame) << " bytes\n"
+              << "Queue memory   : " << result.queue_memory_bytes / 1024.0 << " KiB\n"
               << "Physical slots : " << telemetry::kRingBufferCapacity << "\n\n"
               << "                BENCHMARK RESULT\n"
               << "Generated       : " << result.generated << "\n"
@@ -192,6 +214,9 @@ void print_single_result(std::size_t packets, std::size_t payload_size, const Be
               << "Elapsed         : " << std::fixed << std::setprecision(6) << result.seconds << " s\n"
               << "Throughput      : " << std::fixed << std::setprecision(2) << result.throughput << " packets/s\n"
               << "Avg latency     : " << std::fixed << std::setprecision(3) << result.avg_latency_us << " us\n"
+              << "P50 latency     : " << result.p50_latency_us << " us\n"
+              << "P95 latency     : " << result.p95_latency_us << " us\n"
+              << "P99 latency     : " << result.p99_latency_us << " us\n"
               << "================================================\n";
 }
 
@@ -200,37 +225,45 @@ void print_matrix(const Config& config) {
     if (!config.csv_path.empty()) {
         csv.open(config.csv_path);
         if (!csv) throw std::runtime_error("Unable to open CSV output: " + config.csv_path);
-        csv << "payload_bytes,packets,throughput_packets_per_sec,avg_latency_us,full_retries,peak_queue,integrity_errors,ordering_errors\n";
+        csv << "payload_bytes,packets,throughput_packets_per_sec,avg_latency_us,p50_latency_us,p95_latency_us,p99_latency_us,full_retries,peak_queue,queue_memory_bytes,integrity_errors,ordering_errors\n";
     }
 
-    std::cout << "===============================================================\n"
-              << "                 TELEMETRY BENCHMARK MATRIX\n"
-              << "===============================================================\n"
+    std::cout << "=========================================================================\n"
+              << "                    TELEMETRY BENCHMARK MATRIX\n"
+              << "=========================================================================\n"
               << "Packets per run: " << config.packets << "\n\n";
     std::cout << std::left << std::setw(10) << "Payload"
               << std::setw(18) << "Throughput"
-              << std::setw(16) << "Avg Latency"
-              << std::setw(16) << "Full Retries"
+              << std::setw(14) << "Avg(us)"
+              << std::setw(12) << "P50(us)"
+              << std::setw(12) << "P95(us)"
+              << std::setw(12) << "P99(us)"
               << std::setw(14) << "Peak Queue" << '\n';
     std::cout << std::left << std::setw(10) << "(bytes)"
               << std::setw(18) << "(packets/s)"
-              << std::setw(16) << "(us)"
-              << std::setw(16) << "(count)"
+              << std::setw(14) << ""
+              << std::setw(12) << ""
+              << std::setw(12) << ""
+              << std::setw(12) << ""
               << std::setw(14) << "(frames)" << '\n';
 
     for (const auto payload_size : kBenchmarkPayloads) {
         const auto result = run_benchmark(config.packets, payload_size);
         std::cout << std::left << std::setw(10) << payload_size
                   << std::setw(18) << std::fixed << std::setprecision(2) << result.throughput
-                  << std::setw(16) << std::fixed << std::setprecision(3) << result.avg_latency_us
-                  << std::setw(16) << result.full_retries
+                  << std::setw(14) << std::fixed << std::setprecision(3) << result.avg_latency_us
+                  << std::setw(12) << result.p50_latency_us
+                  << std::setw(12) << result.p95_latency_us
+                  << std::setw(12) << result.p99_latency_us
                   << std::setw(14) << result.peak_queue_depth << '\n';
 
         if (csv) {
             csv << payload_size << ',' << config.packets << ','
                 << std::fixed << std::setprecision(3) << result.throughput << ','
                 << std::fixed << std::setprecision(6) << result.avg_latency_us << ','
-                << result.full_retries << ',' << result.peak_queue_depth << ','
+                << result.p50_latency_us << ',' << result.p95_latency_us << ','
+                << result.p99_latency_us << ',' << result.full_retries << ','
+                << result.peak_queue_depth << ',' << result.queue_memory_bytes << ','
                 << result.integrity_errors << ',' << result.ordering_errors << '\n';
         }
 
@@ -240,7 +273,7 @@ void print_matrix(const Config& config) {
                                      std::to_string(payload_size) + " bytes");
         }
     }
-    std::cout << "===============================================================\n";
+    std::cout << "=========================================================================\n";
     if (csv) std::cout << "CSV results      : " << config.csv_path << '\n';
 }
 
