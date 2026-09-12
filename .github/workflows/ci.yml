@@ -23,4 +23,33 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
       - name: Run benchmark smoke test
-        run: ./build/telemetry
+        run: ./build/telemetry --packets 20000 --payload 128
+
+  sanitizer:
+    name: ASan + UBSan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure with sanitizers
+        run: >-
+          cmake -S . -B build-sanitized
+          -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+
+      - name: Build sanitized targets
+        run: cmake --build build-sanitized --parallel
+
+      - name: Run sanitized tests
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: ctest --test-dir build-sanitized --output-on-failure
+
+      - name: Run sanitized smoke benchmark
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: ./build-sanitized/telemetry --packets 5000 --payload 64
