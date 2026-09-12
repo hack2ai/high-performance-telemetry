@@ -2,6 +2,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 namespace telemetry {
 struct StatisticsSnapshot {
@@ -23,14 +24,5 @@ public:
     void record_invalid() noexcept;
     void observe_queue_depth(std::size_t depth) noexcept;
     StatisticsSnapshot snapshot() const noexcept;
-
-private:
-    std::atomic<std::uint64_t> generated_{0};
-    std::atomic<std::uint64_t> enqueued_{0};
-    std::atomic<std::uint64_t> processed_{0};
-    std::atomic<std::uint64_t> full_retries_{0};
-    std::atomic<std::uint64_t> invalid_frames_{0};
-    std::atomic<std::uint64_t> total_latency_ns_{0};
-    std::atomic<std::uint64_t> peak_queue_depth_{0};
 };
 }
