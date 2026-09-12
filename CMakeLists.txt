@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+set(TELEMETRY_RING_BUFFER_CAPACITY "4096" CACHE STRING
+    "Physical SPSC ring-buffer slots; must be a power of two and at least 2")
 option(TELEMETRY_USE_MODULO_INDEXING
        "Use modulo-based ring indexing for performance comparison"
        OFF)
@@ -20,6 +22,8 @@ add_library(telemetry_core
 target_include_directories(telemetry_core PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_compile_options(telemetry_core PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(telemetry_core PUBLIC Threads::Threads)
+target_compile_definitions(telemetry_core PUBLIC
+    TELEMETRY_RING_BUFFER_CAPACITY=${TELEMETRY_RING_BUFFER_CAPACITY})
 
 if(TELEMETRY_USE_MODULO_INDEXING)
     target_compile_definitions(telemetry_core PRIVATE TELEMETRY_USE_MODULO_INDEXING=1)
