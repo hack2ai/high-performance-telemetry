@@ -14,6 +14,8 @@ A C++20 systems project demonstrating a bounded single-producer/single-consumer 
 - Overflow handling with full-queue retry tracking
 - Configurable packet count and payload size
 - Throughput and latency benchmarking
+- P50/P95/P99 latency percentiles
+- Static queue-memory reporting
 - Payload-size benchmark matrix (64/128/256/512/1024 bytes)
 - Machine-readable CSV benchmark export
 - CMake build
@@ -110,6 +112,19 @@ Show command-line help:
 
 Payload size must be between 1 and 1024 bytes. The benchmark uses retry-on-full semantics, so `Full retries` measures producer backpressure events rather than dropped packets.
 
+## Benchmark Metrics
+
+Each benchmark reports:
+
+- **Throughput:** processed packets per second.
+- **Average latency:** mean producer-to-consumer queue latency.
+- **P50/P95/P99 latency:** percentile latency measurements, useful for observing typical and tail behavior.
+- **Peak queue:** maximum observed queue depth.
+- **Queue memory:** static storage reserved by the ring buffer (`4096 * sizeof(Frame)`).
+- **Full retries:** producer backpressure events caused by a full queue.
+
+Percentile samples are collected only by the consumer thread and do not change the SPSC synchronization model. Benchmark results are machine-dependent and should be compared under the same CPU/compiler/system-load conditions.
+
 ## Benchmark Matrix
 
 Run the reproducible payload-size matrix with the helper script:
@@ -124,7 +139,7 @@ Or provide a custom binary path:
 PACKETS=500000 ./benchmarks/run_matrix.sh ./build/telemetry
 ```
 
-The matrix runs payload sizes of **64, 128, 256, 512, and 1024 bytes** and reports throughput, average latency, producer full-queue retries, and peak queue depth. The script parses the program's own benchmark output, so it does not hard-code performance numbers.
+The matrix runs payload sizes of **64, 128, 256, 512, and 1024 bytes** and reports throughput, average latency, P50/P95/P99 latency, producer full-queue retries, and peak queue depth. The script parses the program's own benchmark output, so it does not hard-code performance numbers.
 
 ## Indexing Performance Comparison
 
@@ -146,7 +161,7 @@ It exports both result sets to CSV and prints an observed throughput ratio for e
 CSV exports contain:
 
 ```text
-payload_bytes,packets,throughput_packets_per_sec,avg_latency_us,full_retries,peak_queue,integrity_errors,ordering_errors
+payload_bytes,packets,throughput_packets_per_sec,avg_latency_us,p50_latency_us,p95_latency_us,p99_latency_us,full_retries,peak_queue,queue_memory_bytes,integrity_errors,ordering_errors
 ```
 
 Performance numbers should be generated from the benchmark on the target machine rather than copied into the README as fixed claims.
@@ -155,4 +170,4 @@ Performance numbers should be generated from the benchmark on the target machine
 
 **High-Performance Real-Time Telemetry Pipeline — C++20**
 
-Developed a fixed-memory SPSC ring-buffer pipeline for low-latency synthetic telemetry ingestion using atomic synchronization, structured packet frames, validation, overflow handling, configurable benchmarks, power-of-two index wrapping, and reproducible throughput/latency measurement with CSV export and indexing comparison.
+Developed a fixed-memory SPSC ring-buffer pipeline for low-latency synthetic telemetry ingestion using atomic synchronization, structured packet frames, validation, overflow handling, configurable benchmarks, power-of-two index wrapping, percentile latency analysis, static memory reporting, and reproducible throughput benchmarking with CSV export and indexing comparison.
