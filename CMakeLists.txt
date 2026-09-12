@@ -11,20 +11,26 @@ option(TELEMETRY_USE_MODULO_INDEXING
 
 find_package(Threads REQUIRED)
 
-add_library(telemetry_core src/ring_buffer.cpp src/telemetry_stats.cpp src/packet_generator.cpp)
+add_library(telemetry_core
+    src/ring_buffer.cpp
+    src/telemetry_stats.cpp
+    src/packet_generator.cpp
+    src/telemetry_logger.cpp
+)
 target_include_directories(telemetry_core PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_compile_options(telemetry_core PRIVATE -Wall -Wextra -Wpedantic)
+target_link_libraries(telemetry_core PUBLIC Threads::Threads)
 
 if(TELEMETRY_USE_MODULO_INDEXING)
     target_compile_definitions(telemetry_core PRIVATE TELEMETRY_USE_MODULO_INDEXING=1)
 endif()
 
 add_executable(telemetry src/main.cpp)
-target_link_libraries(telemetry PRIVATE telemetry_core Threads::Threads)
+target_link_libraries(telemetry PRIVATE telemetry_core)
 target_compile_options(telemetry PRIVATE -Wall -Wextra -Wpedantic)
 
 enable_testing()
 add_executable(ring_buffer_tests tests/ring_buffer_tests.cpp)
-target_link_libraries(ring_buffer_tests PRIVATE telemetry_core Threads::Threads)
+target_link_libraries(ring_buffer_tests PRIVATE telemetry_core)
 target_compile_options(ring_buffer_tests PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME ring_buffer_tests COMMAND ring_buffer_tests)
