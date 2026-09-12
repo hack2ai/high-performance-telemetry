@@ -38,3 +38,8 @@ add_executable(ring_buffer_tests tests/ring_buffer_tests.cpp)
 target_link_libraries(ring_buffer_tests PRIVATE telemetry_core)
 target_compile_options(ring_buffer_tests PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME ring_buffer_tests COMMAND ring_buffer_tests)
+
+add_executable(telemetry_stress_tests tests/stress_tests.cpp)
+target_link_libraries(telemetry_stress_tests PRIVATE telemetry_core)
+target_compile_options(telemetry_stress_tests PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME telemetry_stress_tests COMMAND telemetry_stress_tests)
