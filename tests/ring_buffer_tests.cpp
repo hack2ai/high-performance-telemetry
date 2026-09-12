@@ -1,5 +1,6 @@
 #include "ring_buffer.hpp"
 #include <array>
+#include <atomic>
 #include <cassert>
 #include <cstdint>
 #include <thread>
