@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(high_performance_telemetry VERSION 1.0 LANGUAGES CXX)
+project(high_performance_telemetry VERSION 1.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -12,6 +12,8 @@ option(TELEMETRY_USE_MODULO_INDEXING
        OFF)
 
 find_package(Threads REQUIRED)
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
 add_library(telemetry_core
     src/ring_buffer.cpp
@@ -19,7 +21,11 @@ add_library(telemetry_core
     src/packet_generator.cpp
     src/telemetry_logger.cpp
 )
-target_include_directories(telemetry_core PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_include_directories(telemetry_core
+    PUBLIC
+        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
 target_compile_options(telemetry_core PRIVATE -Wall -Wextra -Wpedantic)
 target_link_libraries(telemetry_core PUBLIC Threads::Threads)
 target_compile_definitions(telemetry_core PUBLIC
@@ -43,3 +49,37 @@ add_executable(telemetry_stress_tests tests/stress_tests.cpp)
 target_link_libraries(telemetry_stress_tests PRIVATE telemetry_core)
 target_compile_options(telemetry_stress_tests PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME telemetry_stress_tests COMMAND telemetry_stress_tests)
+
+install(TARGETS telemetry
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+install(TARGETS telemetry_core
+    EXPORT HighPerformanceTelemetryTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/HighPerformanceTelemetryConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+configure_package_config_file(
+    "${PROJECT_SOURCE_DIR}/cmake/HighPerformanceTelemetryConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/HighPerformanceTelemetryConfig.cmake"
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/HighPerformanceTelemetry
+)
+
+install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/HighPerformanceTelemetryConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/HighPerformanceTelemetryConfigVersion.cmake"
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/HighPerformanceTelemetry
+)
+
+install(EXPORT HighPerformanceTelemetryTargets
+    FILE HighPerformanceTelemetryTargets.cmake
+    NAMESPACE HighPerformanceTelemetry::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/HighPerformanceTelemetry
+)
