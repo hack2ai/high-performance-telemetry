@@ -5,11 +5,19 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+option(TELEMETRY_USE_MODULO_INDEXING
+       "Use modulo-based ring indexing for performance comparison"
+       OFF)
+
 find_package(Threads REQUIRED)
 
 add_library(telemetry_core src/ring_buffer.cpp src/telemetry_stats.cpp src/packet_generator.cpp)
 target_include_directories(telemetry_core PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_compile_options(telemetry_core PRIVATE -Wall -Wextra -Wpedantic)
+
+if(TELEMETRY_USE_MODULO_INDEXING)
+    target_compile_definitions(telemetry_core PRIVATE TELEMETRY_USE_MODULO_INDEXING=1)
+endif()
 
 add_executable(telemetry src/main.cpp)
 target_link_libraries(telemetry PRIVATE telemetry_core Threads::Threads)
