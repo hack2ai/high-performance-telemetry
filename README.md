@@ -10,6 +10,7 @@ A C++20 systems project demonstrating a bounded single-producer/single-consumer 
 - Acquire/release memory ordering
 - Power-of-two ring indexing with bit masking
 - Optional modulo-indexing baseline for performance comparison
+- Configurable compile-time ring-buffer capacity
 - Packet validation
 - Overflow handling with full-queue retry tracking
 - Configurable packet count and payload size
@@ -34,8 +35,9 @@ Synthetic Packet Generator
           v
    +----------------+
    |   SPSC Queue   |
-   | 4095 usable    |
-   | frame slots    |
+   | configurable   |
+   |  power-of-two  |
+   |    capacity    |
    +-------+--------+
            |
            v
@@ -50,7 +52,26 @@ Synthetic Packet Generator
 
 ## Ring Buffer Design
 
-The queue uses **4096 physical slots**, giving **4095 usable frame slots** because one slot is reserved to distinguish full from empty. Since 4096 is a power of two, the default implementation uses a bit mask for index wrapping:
+The queue uses a compile-time configurable number of physical slots. The default is **4096 physical slots**, giving **4095 usable frame slots** because one slot is reserved to distinguish full from empty. The capacity must be a power of two and at least 2.
+
+Configure capacity without changing source code:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DTELEMETRY_RING_BUFFER_CAPACITY=8192
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+```
+
+For a smaller memory footprint:
+
+```bash
+cmake -S . -B build-small -DCMAKE_BUILD_TYPE=Release -DTELEMETRY_RING_BUFFER_CAPACITY=1024
+cmake --build build-small --parallel
+```
+
+Since the queue remains statically allocated, capacity is a build-time scalability parameter rather than a runtime allocation. Compile-time assertions reject invalid non-power-of-two capacities.
+
+Since the default capacity is a power of two, index wrapping uses a bit mask:
 
 ```cpp
 next = (write + 1) & kRingBufferMask;
@@ -68,7 +89,7 @@ The comparison is an empirical benchmark, not a universal claim: results depend 
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
+cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
 
@@ -120,7 +141,7 @@ Each benchmark reports:
 - **Average latency:** mean producer-to-consumer queue latency.
 - **P50/P95/P99 latency:** percentile latency measurements, useful for observing typical and tail behavior.
 - **Peak queue:** maximum observed queue depth.
-- **Queue memory:** static storage reserved by the ring buffer (`4096 * sizeof(Frame)`).
+- **Queue memory:** static storage reserved by the ring buffer.
 - **Full retries:** producer backpressure events caused by a full queue.
 
 Percentile samples are collected only by the consumer thread and do not change the SPSC synchronization model. Benchmark results are machine-dependent and should be compared under the same CPU/compiler/system-load conditions.
@@ -166,8 +187,12 @@ payload_bytes,packets,throughput_packets_per_sec,avg_latency_us,p50_latency_us,p
 
 Performance numbers should be generated from the benchmark on the target machine rather than copied into the README as fixed claims.
 
+## CI Coverage
+
+GitHub Actions validates the normal Release build, a **1024-slot configurable-capacity build**, and an AddressSanitizer/UndefinedBehaviorSanitizer build. The custom-capacity job ensures that the compile-time scalability parameter is exercised automatically.
+
 ## Resume
 
 **High-Performance Real-Time Telemetry Pipeline — C++20**
 
-Developed a fixed-memory SPSC ring-buffer pipeline for low-latency synthetic telemetry ingestion using atomic synchronization, structured packet frames, validation, overflow handling, configurable benchmarks, power-of-two index wrapping, percentile latency analysis, static memory reporting, and reproducible throughput benchmarking with CSV export and indexing comparison.
+Developed a fixed-memory SPSC ring-buffer pipeline for low-latency synthetic telemetry ingestion using atomic synchronization, structured packet frames, validation, overflow handling, configurable capacity and benchmark parameters, power-of-two index wrapping, percentile latency analysis, static memory reporting, and reproducible throughput benchmarking with CSV export and indexing comparison.
