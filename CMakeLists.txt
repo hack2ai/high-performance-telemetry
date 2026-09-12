@@ -1,15 +1,20 @@
 cmake_minimum_required(VERSION 3.16)
 project(high_performance_telemetry VERSION 1.0 LANGUAGES CXX)
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
 find_package(Threads REQUIRED)
-add_library(telemetry_core src/ring_buffer.cpp src/telemetry_stats.cpp src/packet_generator.cpp)
+
+a dd_library(telemetry_core src/ring_buffer.cpp src/telemetry_stats.cpp src/packet_generator.cpp)
 target_include_directories(telemetry_core PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_compile_options(telemetry_core PRIVATE -Wall -Wextra -Wpedantic)
+
 add_executable(telemetry src/main.cpp)
 target_link_libraries(telemetry PRIVATE telemetry_core Threads::Threads)
 target_compile_options(telemetry PRIVATE -Wall -Wextra -Wpedantic)
+
 enable_testing()
 add_executable(ring_buffer_tests tests/ring_buffer_tests.cpp)
 target_link_libraries(ring_buffer_tests PRIVATE telemetry_core Threads::Threads)
