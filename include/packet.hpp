@@ -11,6 +11,11 @@ constexpr std::uint32_t kMagicSignature = 0x54454C45;
 constexpr std::size_t kMaxPayloadSize = 1024;
 constexpr std::size_t kRingBufferCapacity = 4096;
 constexpr std::size_t kUsableQueueCapacity = kRingBufferCapacity - 1;
+constexpr std::size_t kRingBufferMask = kRingBufferCapacity - 1;
+
+static_assert(kRingBufferCapacity >= 2, "Ring buffer capacity must be at least 2");
+static_assert((kRingBufferCapacity & kRingBufferMask) == 0,
+              "Ring buffer capacity must be a power of two");
 
 #pragma pack(push, 1)
 struct PacketHeader {
