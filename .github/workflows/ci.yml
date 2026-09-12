@@ -25,6 +25,28 @@ jobs:
       - name: Run benchmark smoke test
         run: ./build/telemetry --packets 20000 --payload 128
 
+  configurable-capacity:
+    name: Configurable queue capacity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure 1024-slot queue
+        run: >-
+          cmake -S . -B build-capacity
+          -DCMAKE_BUILD_TYPE=Release
+          -DTELEMETRY_RING_BUFFER_CAPACITY=1024
+
+      - name: Build custom-capacity targets
+        run: cmake --build build-capacity --parallel
+
+      - name: Test custom-capacity build
+        run: ctest --test-dir build-capacity --output-on-failure
+
+      - name: Run custom-capacity smoke benchmark
+        run: ./build-capacity/telemetry --packets 10000 --payload 128
+
   sanitizer:
     name: ASan + UBSan
     runs-on: ubuntu-latest
