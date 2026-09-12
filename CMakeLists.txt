@@ -7,7 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Threads REQUIRED)
 
-a dd_library(telemetry_core src/ring_buffer.cpp src/telemetry_stats.cpp src/packet_generator.cpp)
+add_library(telemetry_core src/ring_buffer.cpp src/telemetry_stats.cpp src/packet_generator.cpp)
 target_include_directories(telemetry_core PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_compile_options(telemetry_core PRIVATE -Wall -Wextra -Wpedantic)
 
