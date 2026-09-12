@@ -2,6 +2,25 @@
 #include <cstring>
 
 namespace telemetry {
+namespace {
+
+constexpr std::size_t next_index(std::size_t index) noexcept {
+#ifdef TELEMETRY_USE_MODULO_INDEXING
+    return (index + 1) % kRingBufferCapacity;
+#else
+    return (index + 1) & kRingBufferMask;
+#endif
+}
+
+constexpr std::size_t pending_distance(std::size_t write, std::size_t read) noexcept {
+#ifdef TELEMETRY_USE_MODULO_INDEXING
+    return write >= read ? write - read : kRingBufferCapacity - read + write;
+#else
+    return (write - read) & kRingBufferMask;
+#endif
+}
+
+} // namespace
 
 bool SpscRingBuffer::try_push(std::uint64_t sequence,
                               std::uint16_t source,
@@ -12,7 +31,7 @@ bool SpscRingBuffer::try_push(std::uint64_t sequence,
     if (data == nullptr || length == 0 || length > kMaxPayloadSize) return false;
 
     const auto write = write_.load(std::memory_order_relaxed);
-    const auto next = (write + 1) & kRingBufferMask;
+    const auto next = next_index(write);
     const auto read = read_.load(std::memory_order_acquire);
     if (next == read) return false;
 
@@ -37,14 +56,14 @@ bool SpscRingBuffer::try_pop(Frame& output) noexcept {
     if (read == write) return false;
 
     output = buffer_[read];
-    read_.store((read + 1) & kRingBufferMask, std::memory_order_release);
+    read_.store(next_index(read), std::memory_order_release);
     return true;
 }
 
 std::size_t SpscRingBuffer::pending() const noexcept {
     const auto write = write_.load(std::memory_order_acquire);
     const auto read = read_.load(std::memory_order_acquire);
-    return (write - read) & kRingBufferMask;
+    return pending_distance(write, read);
 }
 
 } // namespace telemetry
