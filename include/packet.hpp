@@ -9,7 +9,12 @@ namespace telemetry {
 
 constexpr std::uint32_t kMagicSignature = 0x54454C45;
 constexpr std::size_t kMaxPayloadSize = 1024;
-constexpr std::size_t kRingBufferCapacity = 4096;
+
+#ifndef TELEMETRY_RING_BUFFER_CAPACITY
+#define TELEMETRY_RING_BUFFER_CAPACITY 4096
+#endif
+
+constexpr std::size_t kRingBufferCapacity = TELEMETRY_RING_BUFFER_CAPACITY;
 constexpr std::size_t kUsableQueueCapacity = kRingBufferCapacity - 1;
 constexpr std::size_t kRingBufferMask = kRingBufferCapacity - 1;
 
