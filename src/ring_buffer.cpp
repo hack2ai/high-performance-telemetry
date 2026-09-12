@@ -12,7 +12,7 @@ bool SpscRingBuffer::try_push(std::uint64_t sequence,
     if (data == nullptr || length == 0 || length > kMaxPayloadSize) return false;
 
     const auto write = write_.load(std::memory_order_relaxed);
-    const auto next = (write + 1) % kRingBufferCapacity;
+    const auto next = (write + 1) & kRingBufferMask;
     const auto read = read_.load(std::memory_order_acquire);
     if (next == read) return false;
 
@@ -37,14 +37,14 @@ bool SpscRingBuffer::try_pop(Frame& output) noexcept {
     if (read == write) return false;
 
     output = buffer_[read];
-    read_.store((read + 1) % kRingBufferCapacity, std::memory_order_release);
+    read_.store((read + 1) & kRingBufferMask, std::memory_order_release);
     return true;
 }
 
 std::size_t SpscRingBuffer::pending() const noexcept {
     const auto write = write_.load(std::memory_order_acquire);
     const auto read = read_.load(std::memory_order_acquire);
-    return write >= read ? write - read : kRingBufferCapacity - read + write;
+    return (write - read) & kRingBufferMask;
 }
 
 } // namespace telemetry
