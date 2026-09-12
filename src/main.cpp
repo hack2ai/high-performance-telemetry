@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdlib>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
@@ -21,6 +22,7 @@ struct Config {
     std::size_t packets = 100000;
     std::size_t payload_size = 128;
     bool matrix = false;
+    std::string csv_path;
 };
 
 struct BenchmarkResult {
@@ -43,6 +45,7 @@ void print_usage(const char* program) {
               << "  --packets N    Number of synthetic packets (default: 100000)\n"
               << "  --payload N    Payload size in bytes, 1-1024 (default: 128)\n"
               << "  --matrix       Run payload matrix: 64, 128, 256, 512, 1024 bytes\n"
+              << "  --csv PATH     Write matrix results to a CSV file (requires --matrix)\n"
               << "  --help         Show this help message\n";
 }
 
@@ -69,11 +72,11 @@ Config parse_args(int argc, char* argv[]) {
             config.matrix = true;
             continue;
         }
-        if (arg == "--packets" || arg == "--payload") {
+        if (arg == "--packets" || arg == "--payload" || arg == "--csv") {
             if (i + 1 >= argc) throw std::invalid_argument("Missing value for " + arg);
-            const auto value = parse_size(argv[++i], arg.c_str());
-            if (arg == "--packets") config.packets = value;
-            else config.payload_size = value;
+            if (arg == "--csv") config.csv_path = argv[++i];
+            else if (arg == "--packets") config.packets = parse_size(argv[++i], arg.c_str());
+            else config.payload_size = parse_size(argv[++i], arg.c_str());
             continue;
         }
         throw std::invalid_argument("Unknown option: " + arg);
@@ -85,6 +88,9 @@ Config parse_args(int argc, char* argv[]) {
     }
     if (config.matrix && config.payload_size != 128) {
         throw std::invalid_argument("--matrix cannot be combined with a custom --payload value");
+    }
+    if (!config.csv_path.empty() && !config.matrix) {
+        throw std::invalid_argument("--csv requires --matrix");
     }
     return config;
 }
@@ -190,6 +196,13 @@ void print_single_result(std::size_t packets, std::size_t payload_size, const Be
 }
 
 void print_matrix(const Config& config) {
+    std::ofstream csv;
+    if (!config.csv_path.empty()) {
+        csv.open(config.csv_path);
+        if (!csv) throw std::runtime_error("Unable to open CSV output: " + config.csv_path);
+        csv << "payload_bytes,packets,throughput_packets_per_sec,avg_latency_us,full_retries,peak_queue,integrity_errors,ordering_errors\n";
+    }
+
     std::cout << "===============================================================\n"
               << "                 TELEMETRY BENCHMARK MATRIX\n"
               << "===============================================================\n"
@@ -212,6 +225,15 @@ void print_matrix(const Config& config) {
                   << std::setw(16) << std::fixed << std::setprecision(3) << result.avg_latency_us
                   << std::setw(16) << result.full_retries
                   << std::setw(14) << result.peak_queue_depth << '\n';
+
+        if (csv) {
+            csv << payload_size << ',' << config.packets << ','
+                << std::fixed << std::setprecision(3) << result.throughput << ','
+                << std::fixed << std::setprecision(6) << result.avg_latency_us << ','
+                << result.full_retries << ',' << result.peak_queue_depth << ','
+                << result.integrity_errors << ',' << result.ordering_errors << '\n';
+        }
+
         if (result.processed != config.packets || result.integrity_errors != 0 ||
             result.ordering_errors != 0) {
             throw std::runtime_error("Benchmark validation failed for payload " +
@@ -219,6 +241,7 @@ void print_matrix(const Config& config) {
         }
     }
     std::cout << "===============================================================\n";
+    if (csv) std::cout << "CSV results      : " << config.csv_path << '\n';
 }
 
 } // namespace
