@@ -8,6 +8,7 @@ A C++20 systems project demonstrating a bounded single-producer/single-consumer 
 - Pre-allocated circular storage
 - Atomic producer/consumer indexes
 - Acquire/release memory ordering
+- Power-of-two ring indexing with bit masking
 - Packet validation
 - Overflow handling with full-queue retry tracking
 - Configurable packet count and payload size
@@ -43,6 +44,18 @@ Synthetic Packet Generator
               Benchmark
 ```
 
+## Ring Buffer Design
+
+The queue uses **4096 physical slots**, giving **4095 usable frame slots** because one slot is reserved to distinguish full from empty. Since 4096 is a power of two, index wrapping uses a bit mask instead of modulo arithmetic:
+
+```cpp
+next = (write + 1) & kRingBufferMask;
+```
+
+This is a micro-optimization for the hot producer/consumer path. Compile-time assertions enforce the power-of-two invariant, and tests exercise multiple complete wraparound cycles.
+
+The implementation is intentionally **SPSC only**: exactly one producer thread and one consumer thread are supported.
+
 ## Build
 
 ```bash
@@ -71,10 +84,10 @@ Custom payload size:
 ./build/telemetry --payload 512
 ```
 
-Combine options:
+Benchmark matrix:
 
 ```bash
-./build/telemetry --packets 500000 --payload 256
+./build/telemetry --matrix --packets 100000
 ```
 
 Show command-line help:
@@ -105,4 +118,4 @@ The matrix runs payload sizes of **64, 128, 256, 512, and 1024 bytes** and repor
 
 **High-Performance Real-Time Telemetry Pipeline — C++20**
 
-Developed a fixed-memory SPSC ring-buffer pipeline for low-latency synthetic telemetry ingestion using atomic synchronization, structured packet frames, validation, overflow handling, configurable benchmarks, and throughput/latency measurement.
+Developed a fixed-memory SPSC ring-buffer pipeline for low-latency synthetic telemetry ingestion using atomic synchronization, structured packet frames, validation, overflow handling, configurable benchmarks, power-of-two index wrapping, and throughput/latency measurement.
