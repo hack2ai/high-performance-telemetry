@@ -1,0 +1,18 @@
+# Reproducible benchmark configuration
+# Copy these values into your shell or benchmark script.
+
+PACKETS=100000
+WARMUP=2
+RUNS=5
+
+# Recommended payload matrix: 64 128 256 512 1024
+
+# Release build:
+# cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+# cmake --build build --parallel
+
+# Run matrix:
+# ./build/telemetry --matrix --packets $PACKETS --warmup $WARMUP --runs $RUNS
+
+# Export CSV:
+# ./build/telemetry --matrix --packets $PACKETS --warmup $WARMUP --runs $RUNS --csv build/benchmark-report/results.csv
