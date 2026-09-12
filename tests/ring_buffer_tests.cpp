@@ -33,9 +33,27 @@ int main() {
     assert(frame.payload[0] == 1 && frame.payload[3] == 4);
     assert(telemetry::is_valid(frame));
 
-    // Detect payload corruption through the frame checksum.
     frame.payload[0] ^= 0xFFU;
     assert(!telemetry::is_valid(frame));
+
+    // Exercise multiple complete wraparound cycles.
+    SpscRingBuffer wrap_queue;
+    constexpr std::size_t wrap_cycles = 8;
+    const std::size_t total = wrap_cycles * wrap_queue.capacity();
+    for (std::size_t i = 0; i < total; ++i) {
+        while (!wrap_queue.try_push(i, 3, 4, payload.data(), payload.size(), 0)) {
+            assert(wrap_queue.try_pop(frame));
+            assert(frame.header.sequence == i - wrap_queue.capacity() + 1);
+        }
+        if ((i + 1) % wrap_queue.capacity() == 0) {
+            assert(wrap_queue.pending() == wrap_queue.capacity());
+            assert(wrap_queue.try_pop(frame));
+        }
+    }
+    while (wrap_queue.pending() != 0) {
+        assert(wrap_queue.try_pop(frame));
+    }
+    assert(wrap_queue.pending() == 0);
 
     constexpr std::size_t iterations = 50000;
     SpscRingBuffer concurrent_queue;
