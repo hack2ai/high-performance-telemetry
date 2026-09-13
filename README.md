@@ -1,89 +1,105 @@
 # High-Performance Real-Time Telemetry
 
-A C++20 systems project demonstrating a bounded single-producer/single-consumer (SPSC) ring buffer for low-latency synthetic telemetry ingestion.
+[![C++ CI](https://github.com/hack2ai/high-performance-telemetry/actions/workflows/ci.yml/badge.svg)](https://github.com/hack2ai/high-performance-telemetry/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)
+![CMake](https://img.shields.io/badge/CMake-3.16%2B-blue.svg)
 
-## Features
+**Low-latency C++20 systems programming with a bounded Single-Producer/Single-Consumer (SPSC) ring buffer.**
 
-- Fixed-size packet frames
-- Pre-allocated circular storage
-- Atomic producer/consumer indexes
-- Acquire/release memory ordering
+A portfolio-oriented systems project focused on concurrency correctness, predictable memory usage, queue backpressure, and reproducible performance measurement under a controlled synthetic workload.
+
+> **Scope:** This repository generates and processes synthetic telemetry locally. It does not capture live network traffic, intercept communications, decrypt traffic, or collect credentials.
+
+## Key Features
+
+- Fixed-size, pre-allocated frame storage
+- SPSC concurrency with atomic acquire/release ordering
 - Power-of-two ring indexing with bit masking
-- Optional modulo-indexing baseline for performance comparison
-- Configurable compile-time ring-buffer capacity
-- Packet validation
-- Overflow handling with full-queue retry tracking
-- Configurable packet count and payload size
-- Throughput and latency benchmarking
-- P50/P95/P99 latency percentiles
-- Static queue-memory reporting
-- Payload-size benchmark matrix (64/128/256/512/1024 bytes)
-- Machine-readable CSV benchmark export
-- CMake build
-- Unit tests
-- GitHub Actions CI
-
-## Scope
-
-This is a local synthetic telemetry benchmark. It does not capture network traffic, perform packet interception, decrypt traffic, or collect credentials.
+- Configurable compile-time queue capacity
+- Sequence and checksum validation
+- Boundary, wraparound, concurrent, and stress tests
+- AddressSanitizer + UndefinedBehaviorSanitizer CI
+- Warm-up and repeated benchmark runs
+- Average and P50/P95/P99 latency metrics
+- Payload-size benchmark matrix
+- CSV export and benchmark reporting
+- CMake install and package support
 
 ## Architecture
 
 ```text
-Synthetic Packet Generator
+Synthetic Workload
+       |
+       v
++-------------------+
+| Packet Generator  |
++---------+---------+
           |
           v
-   +----------------+
-   |   SPSC Queue   |
-   | configurable   |
-   |  power-of-two  |
-   |    capacity    |
-   +-------+--------+
-           |
-           v
-     Packet Consumer
-           |
-     +-----+-----+
-     |           |
- Validation   Statistics
-                 |
-              Benchmark
++---------------------------+
+|      SPSC Ring Buffer     |
+|---------------------------|
+| Fixed-memory frame array  |
+| Atomic read/write indexes |
+| Acquire/release ordering  |
+| Power-of-two masking      |
++-------------+-------------+
+              |
+              v
++---------------------------+
+| Consumer / Validation     |
+| Sequence + checksum       |
++-------------+-------------+
+              |
+              v
++---------------------------+
+| Statistics / Benchmarking |
++---------------------------+
 ```
 
-## Ring Buffer Design
+## Technical Highlights
 
-The queue uses a compile-time configurable number of physical slots. The default is **4096 physical slots**, giving **4095 usable frame slots** because one slot is reserved to distinguish full from empty. The capacity must be a power of two and at least 2.
+| Area | Implementation |
+|---|---|
+| Language | C++20 |
+| Concurrency | SPSC producer/consumer |
+| Synchronization | `std::atomic`, acquire/release |
+| Queue storage | Pre-allocated fixed-size frame array |
+| Optimization | Power-of-two index masking |
+| Integrity | Sequence numbers + deterministic checksum |
+| Configuration | Compile-time queue capacity |
+| Metrics | Throughput, average latency, P50/P95/P99 |
+| Testing | Boundary, FIFO, wraparound, concurrent, stress |
+| Sanitizers | AddressSanitizer + UndefinedBehaviorSanitizer |
+| Build | CMake + CTest |
+| CI | GitHub Actions |
+| Reporting | CSV + benchmark reports |
+| License | MIT |
 
-Configure capacity without changing source code:
+## Repository Structure
 
-```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DTELEMETRY_RING_BUFFER_CAPACITY=8192
-cmake --build build --parallel
-ctest --test-dir build --output-on-failure
+```text
+high-performance-telemetry/
+├── .github/workflows/       # CI pipeline
+├── benchmarks/              # benchmark and reporting tools
+├── cmake/                   # CMake package configuration
+├── include/                 # public headers
+├── src/                     # implementation and CLI
+├── tests/                   # unit/concurrency/stress tests
+├── CMakeLists.txt
+├── CONTRIBUTING.md
+├── LICENSE
+├── RELEASE_NOTES.md
+├── SECURITY.md
+└── README.md
 ```
 
-For a smaller memory footprint:
+## Requirements
 
-```bash
-cmake -S . -B build-small -DCMAKE_BUILD_TYPE=Release -DTELEMETRY_RING_BUFFER_CAPACITY=1024
-cmake --build build-small --parallel
-```
-
-Since the queue remains statically allocated, capacity is a build-time scalability parameter rather than a runtime allocation. Compile-time assertions reject invalid non-power-of-two capacities.
-
-Since the default capacity is a power of two, index wrapping uses a bit mask:
-
-```cpp
-next = (write + 1) & kRingBufferMask;
-```
-
-A CMake option can build the same queue with modulo-based wrapping for a controlled comparison:
-
-```bash
-cmake -S . -B build-modulo -DCMAKE_BUILD_TYPE=Release -DTELEMETRY_USE_MODULO_INDEXING=ON
-```
-
-The comparison is an empirical benchmark, not a universal claim: results depend on the CPU, compiler, operating system, and system load. The implementation is intentionally **SPSC only**: exactly one producer thread and one consumer thread are supported.
+- C++20-compatible compiler
+- CMake 3.16+
+- POSIX-like shell for benchmark helper scripts
 
 ## Build
 
@@ -93,106 +109,186 @@ cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
 
+### Configure Queue Capacity
+
+The default configuration uses **4096 physical slots** and **4095 usable slots**. One slot remains unused so full and empty states are distinguishable.
+
+```bash
+cmake -S . -B build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DTELEMETRY_RING_BUFFER_CAPACITY=8192
+
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+```
+
+The capacity must be a power of two and at least 2.
+
 ## Run
 
-Default benchmark:
+### Default workload
 
 ```bash
 ./build/telemetry
 ```
 
-Custom packet count:
+### Custom workload
 
 ```bash
-./build/telemetry --packets 1000000
+./build/telemetry --packets 1000000 --payload 512
 ```
 
-Custom payload size:
+### Repeated benchmark
 
 ```bash
-./build/telemetry --payload 512
+./build/telemetry \
+  --packets 100000 \
+  --payload 256 \
+  --warmup 2 \
+  --runs 5
 ```
 
-Benchmark matrix:
+### Payload-size matrix
 
 ```bash
-./build/telemetry --matrix --packets 100000
+./build/telemetry \
+  --matrix \
+  --packets 100000 \
+  --warmup 2 \
+  --runs 5
 ```
 
-Export matrix results to CSV:
+The matrix covers **64, 128, 256, 512, and 1024 bytes**.
+
+### CSV export
 
 ```bash
-./build/telemetry --matrix --packets 100000 --csv build/benchmark.csv
+./build/telemetry \
+  --matrix \
+  --packets 100000 \
+  --warmup 2 \
+  --runs 5 \
+  --csv build/benchmark.csv
 ```
 
-Show command-line help:
+## Benchmark Methodology
 
-```bash
-./build/telemetry --help
+The benchmark separates warm-up runs from measured runs and supports repeated measurements to reduce over-interpreting a single noisy run.
+
+Reported metrics include:
+
+- **Throughput** — processed packets per second
+- **Average latency** — mean producer-to-consumer latency
+- **P50 / P95 / P99 latency** — typical and tail behavior
+- **Full retries** — producer backpressure events when the queue is full
+- **Peak queue depth** — maximum observed occupancy
+- **Queue memory** — static storage reserved by the ring buffer
+- **Integrity / ordering errors** — correctness checks during processing
+
+Performance is machine-dependent. CPU model, compiler, operating system, scheduler behavior, background load, and benchmark configuration can affect results. Keep the environment and workload consistent when comparing runs.
+
+## Performance Comparison
+
+The project supports a controlled comparison between power-of-two bit-mask indexing and modulo indexing.
+
+```text
+Optimized: (index + 1) & mask
+Baseline:  (index + 1) % capacity
 ```
 
-Payload size must be between 1 and 1024 bytes. The benchmark uses retry-on-full semantics, so `Full retries` measures producer backpressure events rather than dropped packets.
-
-## Benchmark Metrics
-
-Each benchmark reports:
-
-- **Throughput:** processed packets per second.
-- **Average latency:** mean producer-to-consumer queue latency.
-- **P50/P95/P99 latency:** percentile latency measurements, useful for observing typical and tail behavior.
-- **Peak queue:** maximum observed queue depth.
-- **Queue memory:** static storage reserved by the ring buffer.
-- **Full retries:** producer backpressure events caused by a full queue.
-
-Percentile samples are collected only by the consumer thread and do not change the SPSC synchronization model. Benchmark results are machine-dependent and should be compared under the same CPU/compiler/system-load conditions.
-
-## Benchmark Matrix
-
-Run the reproducible payload-size matrix with the helper script:
-
-```bash
-PACKETS=100000 ./benchmarks/run_matrix.sh
-```
-
-Or provide a custom binary path:
-
-```bash
-PACKETS=500000 ./benchmarks/run_matrix.sh ./build/telemetry
-```
-
-The matrix runs payload sizes of **64, 128, 256, 512, and 1024 bytes** and reports throughput, average latency, P50/P95/P99 latency, producer full-queue retries, and peak queue depth. The script parses the program's own benchmark output, so it does not hard-code performance numbers.
-
-## Indexing Performance Comparison
-
-Build and benchmark both indexing strategies with the same source tree:
+Run:
 
 ```bash
 PACKETS=100000 ./benchmarks/compare_indexing.sh
 ```
 
-The script creates separate Release builds for:
+This is an empirical comparison, not a universal performance claim.
 
-- **Optimized:** power-of-two bit-mask indexing (`TELEMETRY_USE_MODULO_INDEXING=OFF`)
-- **Baseline:** modulo indexing (`TELEMETRY_USE_MODULO_INDEXING=ON`)
+## Testing
 
-It exports both result sets to CSV and prints an observed throughput ratio for each payload size. Run multiple times on the same machine if you want a more stable comparison.
+Coverage includes:
 
-## CSV Schema
+- Empty queue and invalid input
+- Minimum and maximum payload sizes
+- Full-queue behavior
+- FIFO sequence ordering
+- Checksum corruption detection
+- Multiple wraparound cycles
+- Concurrent SPSC operation
+- Long-running stress execution
 
-CSV exports contain:
+Run all tests:
 
-```text
-payload_bytes,packets,throughput_packets_per_sec,avg_latency_us,p50_latency_us,p95_latency_us,p99_latency_us,full_retries,peak_queue,queue_memory_bytes,integrity_errors,ordering_errors
+```bash
+ctest --test-dir build --output-on-failure
 ```
 
-Performance numbers should be generated from the benchmark on the target machine rather than copied into the README as fixed claims.
+## CI
 
-## CI Coverage
+GitHub Actions validates:
 
-GitHub Actions validates the normal Release build, a **1024-slot configurable-capacity build**, and an AddressSanitizer/UndefinedBehaviorSanitizer build. The custom-capacity job ensures that the compile-time scalability parameter is exercised automatically.
+1. Standard Release build and tests
+2. Configurable-capacity build
+3. AddressSanitizer + UndefinedBehaviorSanitizer build
+4. Benchmark smoke tests
+5. CMake installation smoke test
 
-## Resume
+Treat the live workflow status as authoritative. Do not claim CI is passing until GitHub reports a completed successful run.
+
+## Install
+
+```bash
+cmake --install build --prefix ./install
+```
+
+The CMake package exports the `HighPerformanceTelemetry::` target namespace.
+
+## Design Notes
+
+### Why SPSC?
+
+The queue is intentionally designed for exactly one producer and one consumer. This keeps ownership and synchronization rules explicit and avoids presenting an SPSC structure as an MPMC queue.
+
+### Why Power-of-Two Capacity?
+
+A power-of-two capacity allows efficient wraparound with a bit mask:
+
+```cpp
+next = (write + 1) & kRingBufferMask;
+```
+
+The invariant is enforced at compile time.
+
+### Why Integrity Checks?
+
+Sequence numbers verify ordering, while the checksum detects payload corruption. The benchmark can therefore measure performance while continuously checking correctness.
+
+## Security and Scope
+
+See [SECURITY.md](SECURITY.md) for the security policy and [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
+
+## Release Notes
+
+See [RELEASE_NOTES.md](RELEASE_NOTES.md) for the v1.1.0 release summary.
+
+## Resume-Ready Description
 
 **High-Performance Real-Time Telemetry Pipeline — C++20**
 
-Developed a fixed-memory SPSC ring-buffer pipeline for low-latency synthetic telemetry ingestion using atomic synchronization, structured packet frames, validation, overflow handling, configurable capacity and benchmark parameters, power-of-two index wrapping, percentile latency analysis, static memory reporting, and reproducible throughput benchmarking with CSV export and indexing comparison.
+Built a fixed-memory SPSC ring-buffer pipeline using atomic acquire/release synchronization and power-of-two index masking; implemented sequence/checksum validation, configurable capacity, concurrent/stress testing, ASan/UBSan CI, repeated throughput and P50/P95/P99 latency benchmarking, CSV reporting, and CMake installation/package support.
+
+## Interview Topics
+
+- SPSC vs MPMC queue design
+- C++ atomic memory ordering
+- Full/empty ring-buffer invariants
+- Cache-aware data layout
+- Backpressure under queue saturation
+- Tail-latency measurement
+- Benchmark reproducibility
+- Modulo vs bit-mask indexing
+- Sanitizer-backed concurrency testing
+
+## License
+
+MIT — see [LICENSE](LICENSE).
